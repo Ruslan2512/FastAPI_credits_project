@@ -3,10 +3,12 @@ import pandas as pd
 from sqlalchemy import func
 from sqlalchemy.orm import Session
 
-from config import get_db
+from config import get_db, engine, Base
 from models import Credit, Payment, User, Dictionary, Plan
 
 credits_app = FastAPI()
+
+Base.metadata.create_all(bind=engine)
 
 
 @credits_app.get("/user_credits/{user_id}")
@@ -48,7 +50,7 @@ def get_user_credits(user_id: int, db: Session = Depends(get_db)):
 
 
 @credits_app.post("/plans_insert")
-async def plans_insert(file: UploadFile = File("some_file.xls"), db: Session = Depends(get_db)):
+async def plans_insert(file: UploadFile = File(), db: Session = Depends(get_db)):
     df = pd.read_excel(file.file)
 
     if not all(df['period'].dt.day == 1):
