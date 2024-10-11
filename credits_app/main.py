@@ -50,10 +50,10 @@ def get_user_credits(user_id: int, db: Session = Depends(get_db)):
 
 
 @credits_app.post("/plans_insert")
-async def plans_insert(file: UploadFile = File(), db: Session = Depends(get_db)):
+async def plans_insert(file: UploadFile = File(...), db: Session = Depends(get_db)):
     df = pd.read_excel(file.file)
 
-    if not all(df['period'].dt.day == 1):
+    if not all(df['period'].day == 1):
         raise HTTPException(status_code=400, detail="Must be first number of month")
 
     for index, row in df.iterrows():
@@ -79,23 +79,25 @@ def get_plans_performance(date: str, db: Session = Depends(get_db)):
 
     plans = db.query(Plan).filter(Plan.period <= query_date).all()
 
+    issued_credits_sum = 0
+    collected_payments_sum = 0
+    performance = 0
+
     result = []
     for plan in plans:
         category = db.query(Dictionary).filter(Dictionary.id == plan.category_id).first().name
 
-        if category == "Видача":
-            # Сума виданих кредитів за період
-            issued_credits_sum = db.query(Credit).filter(
+        if category == "Видача": # Сума виданих кредитів
+            issued_credits_sum = db.query(func.sum(Credit.body)).filter(
                 Credit.issuance_date >= plan.period,
                 Credit.issuance_date <= query_date
-            ).with_entities(func.sum(Credit.body)).scalar() or 0
+            ).scalar() or 0
             performance = (issued_credits_sum / plan.sum) * 100 if plan.sum != 0 else 0
-        elif category == "Збір":
-            # Сума платежів за період
-            collected_payments_sum = db.query(Payment).join(Credit).filter(
-                Credit.issuance_date >= plan.period,
+        elif category == "Збір": # Сума платежів
+            collected_payments_sum = db.query(func.sum(Payment.sum)).join(Credit).filter(
+                Payment.payment_date >= plan.period,
                 Payment.payment_date <= query_date
-            ).with_entities(func.sum(Payment.sum)).scalar() or 0
+            ).scalar() or 0
             performance = (collected_payments_sum / plan.sum) * 100 if plan.sum != 0 else 0
 
         result.append({
@@ -105,6 +107,7 @@ def get_plans_performance(date: str, db: Session = Depends(get_db)):
             "achieved_sum": issued_credits_sum if category == "Видача" else collected_payments_sum,
             "performance_percent": performance
         })
+
     return result
 
 
