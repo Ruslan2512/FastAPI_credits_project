@@ -33,8 +33,8 @@ def get_user_credits(user_id: int, db: Session = Depends(get_db)):
             })
         else:
             overdue_days = (credit.return_date - credit.issuance_date).days
-            body_payments = sum(a.sum for a in credit.payments if a.type_id == 1)
-            percent_payments = sum(a.sum for a in credit.payments if a.type_id == 2)
+            body_payments = sum(a.body for a in db.query(Credit) if a.user_id == user_id)
+            percent_payments = sum(a.percent for a in db.query(Credit) if a.user_id == user_id)
             result.append({
                 "issuance_date": credit.issuance_date,
                 "is_closed": False,
@@ -87,13 +87,14 @@ def get_plans_performance(date: str, db: Session = Depends(get_db)):
     for plan in plans:
         category = db.query(Dictionary).filter(Dictionary.id == plan.category_id).first().name
 
-        if category == "Видача": # Сума виданих кредитів
+        if category == "видача": # Сума виданих кредитів
             issued_credits_sum = db.query(func.sum(Credit.body)).filter(
-                Credit.issuance_date >= plan.period,
+                Credit.issuance_date >= Plan.period,
                 Credit.issuance_date <= query_date
             ).scalar() or 0
             performance = (issued_credits_sum / plan.sum) * 100 if plan.sum != 0 else 0
-        elif category == "Збір": # Сума платежів
+
+        elif category == "збір": # Сума платежів
             collected_payments_sum = db.query(func.sum(Payment.sum)).join(Credit).filter(
                 Payment.payment_date >= plan.period,
                 Payment.payment_date <= query_date
@@ -104,8 +105,8 @@ def get_plans_performance(date: str, db: Session = Depends(get_db)):
             "plan_month": plan.period,
             "category": category,
             "plan_sum": plan.sum,
-            "achieved_sum": issued_credits_sum if category == "Видача" else collected_payments_sum,
-            "performance_percent": performance
+            "achieved_sum": round(issued_credits_sum, 2) if category == "Видача" else round(collected_payments_sum, 2),
+            "performance_percent": round(performance, 2)
         })
 
     return result
@@ -130,8 +131,9 @@ def get_year_performance(year: int, db: Session = Depends(get_db)):
     # Отримання планів за кожен місяць року
     result = []
     for month in range(1, 13):
-        month_start = datetime(year, month, 1)
-        month_end = datetime(year, month + 1, 1) if month < 12 else end_date
+        month_start = (datetime(year, month, 1)).date()
+        month_end = (datetime(year, month + 1, 1) if month < 12 else end_date).date()
+        print(month_start)
 
         # Сума виданих кредитів за місяць
         monthly_credits_sum = db.query(func.sum(Credit.body)).filter(
@@ -148,11 +150,11 @@ def get_year_performance(year: int, db: Session = Depends(get_db)):
         # Отримання планів видачі та збору за місяць
         issuance_plan = db.query(Plan).join(Dictionary).filter(
             Plan.period == month_start,
-            Dictionary.name == "Видача"
+            Dictionary.name == "видача"
         ).first()
         collection_plan = db.query(Plan).join(Dictionary).filter(
             Plan.period == month_start,
-            Dictionary.name == "Збір"
+            Dictionary.name == "збір"
         ).first()
 
         issuance_plan_sum = issuance_plan.sum if issuance_plan else 0
@@ -175,10 +177,10 @@ def get_year_performance(year: int, db: Session = Depends(get_db)):
                 Payment.payment_date < month_end
             ).count(),
             "collection_plan_sum": collection_plan_sum,
-            "monthly_payments_sum": monthly_payments_sum,
+            "monthly_payments_sum": round(monthly_payments_sum, 2),
             "collection_performance_percent": collection_performance,
-            "issuance_percent_of_year": (monthly_credits_sum / year_credits_sum * 100) if year_credits_sum else 0,
-            "payments_percent_of_year": (monthly_payments_sum / year_payments_sum * 100) if year_payments_sum else 0
+            "issuance_percent_of_year": round((monthly_credits_sum / year_credits_sum * 100) if year_credits_sum else 0, 2),
+            "payments_percent_of_year": round((monthly_payments_sum / year_payments_sum * 100) if year_payments_sum else 0, 2)
         })
 
     return result

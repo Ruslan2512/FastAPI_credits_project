@@ -19,9 +19,9 @@ def test_get_user_credits():
 
 
 def test_get_plans_performance():
-    response = client.get("/plans_performance?date=2024-01-01")  # Припустимо, ви тестуєте продуктивність на певну дату
+    response = client.get("/plans_performance?date=2024-01-01")
     assert response.status_code == 200
-    assert isinstance(response.json(), list)  # Перевірка, що відповідь є списком
-    if response.json():  # Якщо список не пустий
+    assert isinstance(response.json(), list)
+    if response.json():
         assert "plan_month" in response.json()[0]
         assert "performance_percent" in response.json()[0]
